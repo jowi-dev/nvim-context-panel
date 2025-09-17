@@ -340,9 +340,9 @@ function M.format_all_stacks()
     end
     line_num = line_num + 1
     
-    -- Show root
-    local root_file = M.format_filename_from_path(stack.root_file)
-    local root_line = string.format("  └─ %s:%d (root)", root_file, stack.root_line or 1)
+    -- Show root - get module name from file
+    local root_module = M.extract_module_from_file(stack.root_file)
+    local root_line = string.format("  %s (root)", root_module)
     table.insert(lines, root_line)
     line_num = line_num + 1
     
@@ -350,37 +350,25 @@ function M.format_all_stacks()
     local items_to_show = math.min(#stack.items, stack.current_idx or 0)
     for i = 1, items_to_show do
       if i > state.config.max_stack_depth then
-        table.insert(lines, "    ... (truncated)")
+        table.insert(lines, "  ... (truncated)")
         line_num = line_num + 1
         break
       end
       
       local item = stack.items[i]
       local is_current = is_active and (i == stack.current_idx)
-      local indent = string.rep("  ", i + 1)
       
       -- Get tag info
       local tag_name = item.tagname or ""
-      local from_file = ""
-      local from_line = 0
       
-      if item.from and #item.from >= 2 then
-        from_file = M.format_filename(item.from[1])
-        from_line = item.from[2]
-      end
+      -- Add down arrow
+      table.insert(lines, "  ↓")
+      line_num = line_num + 1
       
-      -- Build line
-      local line = indent .. "└─ "
-      if from_file ~= "" then
-        line = line .. from_file
-        if state.config.show_line_numbers and from_line > 0 then
-          line = line .. ":" .. from_line
-        end
-      end
+      -- Extract module and function from tag
+      local display_name = M.format_elixir_tag_display(tag_name, item)
       
-      if tag_name ~= "" then
-        line = line .. " → " .. M.format_elixir_symbol(tag_name)
-      end
+      local line = "  " .. display_name
       
       if is_current then
         line = line .. " ← [current]"
@@ -428,43 +416,75 @@ function M.format_filename_from_path(filepath)
   end
 end
 
--- Format Elixir symbols with arity if applicable
+-- Extract module name from Elixir file path
+function M.extract_module_from_file(filepath)
+  if not filepath or filepath == "" then
+    return "Unknown"
+  end
+  
+  local filename = vim.fn.fnamemodify(filepath, ':t:r') -- Get filename without extension
+  
+  -- Convert snake_case to PascalCase for module name
+  local module_name = filename:gsub("_(%w)", function(letter)
+    return letter:upper()
+  end)
+  
+  -- Capitalize first letter
+  module_name = module_name:sub(1, 1):upper() .. module_name:sub(2)
+  
+  -- Handle common Elixir file patterns
+  if module_name:match("Test$") then
+    return module_name
+  end
+  
+  return module_name
+end
+
+-- Format tag display as Module.function/arity
+function M.format_elixir_tag_display(tag_name, item)
+  if not tag_name or tag_name == "" then
+    return "Unknown"
+  end
+  
+  -- If tag already looks like Module.function/arity, use it
+  if tag_name:match("^[A-Z][%w%.]*%.[%w_]+/?%d*$") then
+    return tag_name
+  end
+  
+  -- Try to extract module from the file we're jumping to
+  local target_file = ""
+  if item.from and #item.from >= 1 then
+    target_file = vim.api.nvim_buf_get_name(item.from[1])
+  end
+  
+  local module_name = M.extract_module_from_file(target_file)
+  
+  -- Handle function definitions with arity (e.g., handle_call/3)
+  local func_name, arity = tag_name:match("^([%w_]+)/(%d+)$")
+  if func_name and arity then
+    return string.format("%s.%s/%s", module_name, func_name, arity)
+  end
+  
+  -- Handle function definitions without arity
+  if tag_name:match("^[%w_]+$") then
+    return string.format("%s.%s", module_name, tag_name)
+  end
+  
+  -- Handle already module-qualified names (e.g., MyApp.Server)
+  if tag_name:match("^[A-Z][%w%.]*$") then
+    return tag_name
+  end
+  
+  -- Default: combine module and tag
+  return string.format("%s.%s", module_name, tag_name)
+end
+
+-- Format Elixir symbols with arity if applicable (legacy function)
 function M.format_elixir_symbol(symbol)
   if not symbol or symbol == "" then
     return ""
   end
   
-  -- Handle Elixir module names (e.g., MyApp.Server)
-  if symbol:match("^[A-Z][%w%.]*[A-Z][%w]*$") then
-    return symbol .. " (module)"
-  end
-  
-  -- Handle function definitions with arity (e.g., handle_call/3)
-  local func_name, arity = symbol:match("^([%w_]+)/(%d+)$")
-  if func_name and arity then
-    return func_name .. "/" .. arity .. " (function)"
-  end
-  
-  -- Handle function definitions without arity
-  if symbol:match("^[%w_]+$") then
-    -- Try to detect if this might be a function by context
-    local current_buf = vim.api.nvim_get_current_buf()
-    local current_line = vim.api.nvim_win_get_cursor(0)[1]
-    local line_content = vim.api.nvim_buf_get_lines(current_buf, current_line - 1, current_line, false)[1]
-    
-    if line_content and (line_content:match("def%s+" .. symbol) or line_content:match("defp%s+" .. symbol)) then
-      return symbol .. " (function)"
-    end
-    
-    return symbol
-  end
-  
-  -- Handle pipe operators and other Elixir constructs
-  if symbol:match("|>") then
-    return symbol:gsub("|>", "→")
-  end
-  
-  -- Default: return as-is
   return symbol
 end
 
