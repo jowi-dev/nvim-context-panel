@@ -18,7 +18,9 @@ local state = {
   panel_win = nil,
   panel_buf = nil,
   is_visible = false,
-  tag_stack = {},
+  stacks = {}, -- Multiple named stacks: { stack_id = { name, items, current_idx } }
+  active_stack_id = nil,
+  next_stack_id = 1,
 }
 
 -- Setup function
@@ -30,6 +32,9 @@ function M.setup(opts)
   vim.api.nvim_create_user_command('TagStackHide', M.hide, {})
   vim.api.nvim_create_user_command('TagStackToggle', M.toggle, {})
   vim.api.nvim_create_user_command('TagStackClear', M.clear, {})
+  vim.api.nvim_create_user_command('TagStackNew', M.new_stack, {})
+  vim.api.nvim_create_user_command('TagStackNext', M.next_stack, {})
+  vim.api.nvim_create_user_command('TagStackPrev', M.prev_stack, {})
   
   -- Set up autocommands for tag navigation events
   local augroup = vim.api.nvim_create_augroup('TagStack', { clear = true })
@@ -38,6 +43,7 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({'BufEnter', 'CursorHold'}, {
     group = augroup,
     callback = function()
+      M.detect_stack_changes()
       if state.is_visible then
         M.update_display()
       elseif state.config.auto_show and M.has_tag_stack() then
@@ -91,13 +97,121 @@ function M.toggle()
   end
 end
 
--- Clear the tag stack
+-- Clear the current tag stack
 function M.clear()
+  if state.active_stack_id then
+    state.stacks[state.active_stack_id] = nil
+    state.active_stack_id = nil
+  end
   -- Clear Neovim's tag stack
   vim.fn.settagstack(vim.fn.winnr(), {items = {}, curidx = 1})
   if state.is_visible then
     M.update_display()
   end
+end
+
+-- Create a new tag stack
+function M.new_stack()
+  local stack_id = "stack_" .. state.next_stack_id
+  state.next_stack_id = state.next_stack_id + 1
+  
+  local current_file = vim.api.nvim_buf_get_name(0)
+  local root_name = vim.fn.fnamemodify(current_file, ':t:r') or "Stack " .. state.next_stack_id
+  
+  state.stacks[stack_id] = {
+    name = root_name,
+    items = {},
+    root_file = current_file,
+    root_line = vim.api.nvim_win_get_cursor(0)[1],
+  }
+  
+  state.active_stack_id = stack_id
+  
+  if state.is_visible then
+    M.update_display()
+  end
+end
+
+-- Switch to next stack
+function M.next_stack()
+  local stack_ids = vim.tbl_keys(state.stacks)
+  if #stack_ids <= 1 then return end
+  
+  local current_idx = 1
+  for i, id in ipairs(stack_ids) do
+    if id == state.active_stack_id then
+      current_idx = i
+      break
+    end
+  end
+  
+  local next_idx = (current_idx % #stack_ids) + 1
+  state.active_stack_id = stack_ids[next_idx]
+  
+  if state.is_visible then
+    M.update_display()
+  end
+end
+
+-- Switch to previous stack
+function M.prev_stack()
+  local stack_ids = vim.tbl_keys(state.stacks)
+  if #stack_ids <= 1 then return end
+  
+  local current_idx = 1
+  for i, id in ipairs(stack_ids) do
+    if id == state.active_stack_id then
+      current_idx = i
+      break
+    end
+  end
+  
+  local prev_idx = current_idx == 1 and #stack_ids or current_idx - 1
+  state.active_stack_id = stack_ids[prev_idx]
+  
+  if state.is_visible then
+    M.update_display()
+  end
+end
+
+-- Detect changes in tag stack and manage multiple stacks
+function M.detect_stack_changes()
+  local current_tag_stack = vim.fn.gettagstack()
+  
+  -- If no active stack, create one
+  if not state.active_stack_id then
+    M.new_stack()
+    return
+  end
+  
+  local active_stack = state.stacks[state.active_stack_id]
+  if not active_stack then
+    M.new_stack()
+    return
+  end
+  
+  -- Check if we've returned to root and then jumped to a new path
+  if current_tag_stack.curidx == 0 or #current_tag_stack.items == 0 then
+    -- Back at root - check if we should start a new stack on next jump
+    active_stack.at_root = true
+  elseif active_stack.at_root and current_tag_stack.curidx > 0 then
+    -- We were at root and now have jumped - this might be a new path
+    local current_item = current_tag_stack.items[current_tag_stack.curidx]
+    local last_known = active_stack.items[1]
+    
+    if last_known and current_item and 
+       (current_item.tagname ~= last_known.tagname or 
+        current_item.from[1] ~= last_known.from[1]) then
+      -- Different path - create new stack
+      M.new_stack()
+      return
+    end
+    active_stack.at_root = false
+  end
+  
+  -- Update current stack with tag stack data
+  active_stack.items = current_tag_stack.items or {}
+  active_stack.current_idx = current_tag_stack.curidx or 0
 end
 
 -- Check if there's a meaningful tag stack
@@ -165,82 +279,145 @@ function M.update_display()
     return
   end
   
-  -- Get current tag stack
-  local tag_stack = vim.fn.gettagstack()
-  local lines = M.format_tag_stack(tag_stack)
+  local lines, highlights = M.format_all_stacks()
   
   -- Update buffer content
   vim.api.nvim_buf_set_option(state.panel_buf, 'modifiable', true)
   vim.api.nvim_buf_set_lines(state.panel_buf, 0, -1, false, lines)
   vim.api.nvim_buf_set_option(state.panel_buf, 'modifiable', false)
+  
+  -- Apply syntax highlighting
+  M.apply_highlights(highlights)
 end
 
--- Format the tag stack for display
-function M.format_tag_stack(tag_stack)
-  local lines = { "📁 Tag Stack:" }
+-- Apply syntax highlighting
+function M.apply_highlights(highlights)
+  -- Clear existing highlights
+  vim.api.nvim_buf_clear_namespace(state.panel_buf, 0, 0, -1)
   
-  if not tag_stack or not tag_stack.items or #tag_stack.items == 0 then
-    table.insert(lines, "  (empty)")
-    return lines
+  -- Apply new highlights
+  for _, hl in ipairs(highlights) do
+    vim.api.nvim_buf_add_highlight(state.panel_buf, 0, hl.group, hl.line, hl.col_start, hl.col_end)
+  end
+end
+
+-- Format all stacks for display
+function M.format_all_stacks()
+  local lines = {}
+  local highlights = {}
+  local line_num = 0
+  
+  -- Header
+  table.insert(lines, "📁 Tag Stacks:")
+  line_num = line_num + 1
+  
+  if vim.tbl_isempty(state.stacks) then
+    table.insert(lines, "  (no stacks)")
+    return lines, highlights
   end
   
-  local current_index = tag_stack.curidx or 1
-  local items_to_show = math.min(#tag_stack.items, current_index)
+  local stack_count = vim.tbl_count(state.stacks)
+  if stack_count > 1 then
+    table.insert(lines, string.format("  (%d stacks - use :TagStackNext/:TagStackPrev)", stack_count))
+    line_num = line_num + 1
+  end
   
-  -- Show the root file (current buffer if no tags jumped yet)
-  local current_buf = vim.api.nvim_get_current_buf()
-  local current_file = M.format_filename(current_buf)
-  local current_line = vim.api.nvim_win_get_cursor(0)[1]
-  
-  table.insert(lines, "└─ " .. current_file .. ":" .. current_line .. " (root)")
-  
-  -- Show each level of the tag stack
-  for i = 1, items_to_show do
-    if i > state.config.max_stack_depth then
-      table.insert(lines, "  ... (truncated)")
-      break
+  -- Show each stack
+  for stack_id, stack in pairs(state.stacks) do
+    local is_active = (stack_id == state.active_stack_id)
+    
+    -- Stack header
+    local header = string.format("%s %s", is_active and "▶" or " ", stack.name)
+    table.insert(lines, header)
+    
+    if is_active then
+      table.insert(highlights, {
+        group = 'String',  -- Green-ish color
+        line = line_num,
+        col_start = 0,
+        col_end = #header
+      })
     end
+    line_num = line_num + 1
     
-    local item = tag_stack.items[i]
-    local is_current_level = (i == current_index)
-    local indent = string.rep("  ", i)
+    -- Show root
+    local root_file = M.format_filename_from_path(stack.root_file)
+    local root_line = string.format("  └─ %s:%d (root)", root_file, stack.root_line or 1)
+    table.insert(lines, root_line)
+    line_num = line_num + 1
     
-    -- Get tag information
-    local tag_name = item.tagname or ""
-    local from_file = ""
-    local from_line = 0
-    
-    if item.from and #item.from >= 2 then
-      from_file = M.format_filename(item.from[1])
-      from_line = item.from[2]
-    end
-    
-    -- Build display line
-    local line = indent .. "└─ "
-    if from_file ~= "" then
-      line = line .. from_file
-      if state.config.show_line_numbers and from_line > 0 then
-        line = line .. ":" .. from_line
+    -- Show stack items
+    local items_to_show = math.min(#stack.items, stack.current_idx or 0)
+    for i = 1, items_to_show do
+      if i > state.config.max_stack_depth then
+        table.insert(lines, "    ... (truncated)")
+        line_num = line_num + 1
+        break
       end
+      
+      local item = stack.items[i]
+      local is_current = is_active and (i == stack.current_idx)
+      local indent = string.rep("  ", i + 1)
+      
+      -- Get tag info
+      local tag_name = item.tagname or ""
+      local from_file = ""
+      local from_line = 0
+      
+      if item.from and #item.from >= 2 then
+        from_file = M.format_filename(item.from[1])
+        from_line = item.from[2]
+      end
+      
+      -- Build line
+      local line = indent .. "└─ "
+      if from_file ~= "" then
+        line = line .. from_file
+        if state.config.show_line_numbers and from_line > 0 then
+          line = line .. ":" .. from_line
+        end
+      end
+      
+      if tag_name ~= "" then
+        line = line .. " → " .. M.format_elixir_symbol(tag_name)
+      end
+      
+      if is_current then
+        line = line .. " ← [current]"
+        -- Highlight current item in green
+        table.insert(highlights, {
+          group = 'String',
+          line = line_num,
+          col_start = 0,
+          col_end = #line
+        })
+      end
+      
+      table.insert(lines, line)
+      line_num = line_num + 1
     end
     
-    if tag_name ~= "" then
-      line = line .. " → " .. M.format_elixir_symbol(tag_name)
+    -- Add separator between stacks
+    if stack_count > 1 then
+      table.insert(lines, "")
+      line_num = line_num + 1
     end
-    
-    if is_current_level then
-      line = line .. " ← [current]"
-    end
-    
-    table.insert(lines, line)
   end
   
-  return lines
+  return lines, highlights
 end
 
 -- Format filename according to config
 function M.format_filename(bufnr)
   local filepath = vim.api.nvim_buf_get_name(bufnr)
+  return M.format_filename_from_path(filepath)
+end
+
+-- Format filename from path according to config
+function M.format_filename_from_path(filepath)
+  if not filepath or filepath == "" then
+    return "untitled"
+  end
   
   if state.config.show_file_path == 'filename' then
     return vim.fn.fnamemodify(filepath, ':t')
