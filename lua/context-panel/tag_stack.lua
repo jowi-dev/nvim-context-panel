@@ -56,9 +56,10 @@ function M.setup(config)
     'BufLeave', 'WinLeave', 'BufNew', 'BufReadPost', 'User'
   }, {
     group = augroup,
-    callback = function(ev)
-      print("EVENT DEBUG:", ev.event, "FILE:", vim.fn.expand('%:t'))
+    callback = function()
+      print("EVENT DEBUG: FIRING EVENT")
       M.detect_stack_changes()
+      --require('context-panel').request_update()
     end,
   })
   

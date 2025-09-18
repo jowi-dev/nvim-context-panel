@@ -85,7 +85,6 @@ calculate_panel_config	lua/context-panel/init.lua	/^function M.calculate_panel_c
 callback	lua/context-panel/completion.lua	/^      callback = function()$/;"	f
 callback	lua/context-panel/init.lua	/^    callback = function()$/;"	f
 callback	lua/context-panel/tag_stack.lua	/^    callback = function()$/;"	f
-callback	lua/context-panel/tag_stack.lua	/^    callback = function(ev)$/;"	f
 clear	lua/context-panel/tag_stack.lua	/^function M.clear()$/;"	f	unknown:M
 clear_completions	lua/context-panel/completion.lua	/^function M.clear_completions()$/;"	f	unknown:M
 clear_tag_stack	lua/context-panel/init.lua	/^function M.clear_tag_stack()$/;"	f	unknown:M
