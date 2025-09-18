@@ -16,13 +16,28 @@ function M.setup(config)
   local augroup = vim.api.nvim_create_augroup('ContextPanelTagStack', { clear = true })
   
   -- Handle initial file opening to create root stack
-  vim.api.nvim_create_autocmd({'VimEnter', 'BufReadPost'}, {
+  vim.api.nvim_create_autocmd({'VimEnter', 'BufReadPost', 'BufEnter'}, {
     group = augroup,
     callback = function()
-      -- Only create initial stack if we don't have one and the buffer has a real file
+      -- Create initial stack for any real file
       local bufname = vim.api.nvim_buf_get_name(0)
-      if not state.active_stack_id and bufname and bufname ~= "" and vim.fn.filereadable(bufname) == 1 then
-        M.new_stack()
+      if bufname and bufname ~= "" and vim.fn.filereadable(bufname) == 1 then
+        -- Create stack if we don't have one, or if we switched to a different file
+        if not state.active_stack_id then
+          M.new_stack()
+          require('context-panel').request_update()
+        else
+          -- Check if current file is different from active stack root
+          local active_stack = state.stacks[state.active_stack_id]
+          if active_stack and active_stack.root_file ~= bufname then
+            -- Only create new stack if we're not just navigating within existing stack
+            local current_tag_stack = vim.fn.gettagstack()
+            if current_tag_stack.curidx == 0 or #current_tag_stack.items == 0 then
+              M.new_stack()
+              require('context-panel').request_update()
+            end
+          end
+        end
       end
     end,
   })

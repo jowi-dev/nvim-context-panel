@@ -11,7 +11,7 @@ vim.g.loaded_context_panel = true
 local function setup_default_keybindings()
   -- Context panel controls
   if not vim.fn.hasmapto('<Plug>ContextPanelToggle', 'n') then
-    vim.keymap.set('n', '<leader>cp', '<Plug>ContextPanelToggle', { desc = 'Toggle context panel' })
+    vim.keymap.set('n', '<space>cp', '<Plug>ContextPanelToggle', { desc = 'Toggle context panel' })
   end
   
   -- Legacy tag stack mappings for backwards compatibility
