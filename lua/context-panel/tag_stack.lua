@@ -42,7 +42,7 @@ function M.setup(config)
     end,
   })
   
-  -- Listen for tag jumps
+  -- Listen for tag jumps - use specific events that indicate tag navigation
   vim.api.nvim_create_autocmd({'BufEnter'}, {
     group = augroup,
     callback = function()
@@ -50,6 +50,16 @@ function M.setup(config)
     end,
   })
   
+  -- Also listen for direct tag stack changes (this catches C-] and C-t)
+  vim.api.nvim_create_autocmd({'User'}, {
+    group = augroup,
+    pattern = 'TagStackChanged',
+    callback = function()
+      M.detect_stack_changes()
+    end,
+  })
+  
+  -- Fallback with shorter delay for any missed updates
   vim.api.nvim_create_autocmd({'CursorHold'}, {
     group = augroup,
     callback = function()
@@ -190,8 +200,9 @@ function M.detect_stack_changes()
   active_stack.current_idx = normalized_curidx
   state.cached_display = nil
   
-  -- Notify main panel to update
-  require('context-panel').request_update()
+  -- Force immediate update for tag navigation changes (bypass debouncing)
+  local main_panel = require('context-panel')
+  main_panel.update_display()
 end
 
 -- Format tag stack display
