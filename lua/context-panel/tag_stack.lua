@@ -205,6 +205,14 @@ function M.format_display(config)
   table.insert(lines, "📁 Tag Stacks:")
   line_num = line_num + 1
   
+  -- Force create a stack if none exists for current file
+  if vim.tbl_isempty(state.stacks) then
+    local bufname = vim.api.nvim_buf_get_name(0)
+    if bufname and bufname ~= "" and vim.fn.filereadable(bufname) == 1 then
+      M.new_stack()
+    end
+  end
+  
   if vim.tbl_isempty(state.stacks) then
     table.insert(lines, "  (no stacks)")
     state.cached_display = { lines = lines, highlights = highlights }
