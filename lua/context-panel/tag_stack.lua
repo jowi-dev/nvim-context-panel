@@ -200,9 +200,8 @@ function M.detect_stack_changes()
   active_stack.current_idx = normalized_curidx
   state.cached_display = nil
   
-  -- Force immediate update for tag navigation changes (bypass debouncing)
-  local main_panel = require('context-panel')
-  main_panel.update_display()
+  -- Use lightweight update request with minimal delay for tag navigation
+  require('context-panel').debounced_update(10) -- 10ms instead of default 50ms
 end
 
 -- Format tag stack display
