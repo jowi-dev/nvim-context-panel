@@ -39,6 +39,21 @@ function M.setup(opts)
   -- Set up autocommands for tag navigation events
   local augroup = vim.api.nvim_create_augroup('TagStack', { clear = true })
   
+  -- Handle initial file opening to create root stack
+  vim.api.nvim_create_autocmd({'VimEnter', 'BufReadPost'}, {
+    group = augroup,
+    callback = function()
+      -- Only create initial stack if we don't have one and the buffer has a real file
+      local bufname = vim.api.nvim_buf_get_name(0)
+      if not state.active_stack_id and bufname and bufname ~= "" and vim.fn.filereadable(bufname) == 1 then
+        M.new_stack()
+        if state.config.auto_show then
+          M.show()
+        end
+      end
+    end,
+  })
+  
   -- Listen for tag jumps and updates
   vim.api.nvim_create_autocmd({'BufEnter', 'CursorHold'}, {
     group = augroup,
@@ -46,7 +61,7 @@ function M.setup(opts)
       M.detect_stack_changes()
       if state.is_visible then
         M.update_display()
-      elseif state.config.auto_show and M.has_tag_stack() then
+      elseif state.config.auto_show and (M.has_tag_stack() or state.active_stack_id) then
         M.show()
       end
     end,
