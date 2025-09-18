@@ -166,11 +166,14 @@ function M.detect_stack_changes()
     return
   end
   
+  -- Normalize curidx to handle Vim's 1-based indexing
+  local normalized_curidx = math.max(0, (current_tag_stack.curidx or 1) - 1)
+  
   -- Check if we've returned to root and then jumped to a new path
-  if current_tag_stack.curidx == 0 or #current_tag_stack.items == 0 then
+  if normalized_curidx == 0 or #current_tag_stack.items == 0 then
     active_stack.at_root = true
-  elseif active_stack.at_root and current_tag_stack.curidx > 0 then
-    local current_item = current_tag_stack.items[current_tag_stack.curidx]
+  elseif active_stack.at_root and normalized_curidx > 0 then
+    local current_item = current_tag_stack.items[normalized_curidx]
     local last_known = active_stack.items[1]
     
     if last_known and current_item and 
@@ -184,7 +187,7 @@ function M.detect_stack_changes()
   
   -- Update current stack with tag stack data
   active_stack.items = current_tag_stack.items or {}
-  active_stack.current_idx = current_tag_stack.curidx or 0
+  active_stack.current_idx = normalized_curidx
   state.cached_display = nil
   
   -- Notify main panel to update
@@ -247,7 +250,7 @@ function M.format_display(config)
     local root_module = M.extract_module_from_file(stack.root_file)
     local root_line = string.format("  %s (root)", root_module)
     
-    local at_root = is_active and (stack.current_idx == 0 or stack.current_idx == nil)
+    local at_root = is_active and (stack.current_idx == 0)
     if at_root then
       root_line = root_line .. " ← [current]"
       table.insert(highlights, {
