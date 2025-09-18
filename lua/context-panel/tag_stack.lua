@@ -51,20 +51,13 @@ function M.setup(config)
   })
   
   -- Test what events actually fire during tag navigation (temporary debug)
-  vim.api.nvim_create_autocmd({'*'}, {
+  vim.api.nvim_create_autocmd({
+    'BufEnter', 'WinEnter', 'BufRead', 'TabEnter', 'BufWinEnter',
+    'BufLeave', 'WinLeave', 'BufNew', 'BufReadPost', 'User'
+  }, {
     group = augroup,
     callback = function(ev)
-      -- Only log events that might be relevant to avoid spam
-      local relevant_events = {
-        'BufEnter', 'WinEnter', 'BufRead', 'TabEnter', 'BufWinEnter',
-        'User', 'TagStackPush', 'TagStackPop', 'BufLeave', 'WinLeave'
-      }
-      for _, event in ipairs(relevant_events) do
-        if ev.event == event then
-          print("EVENT DEBUG:", ev.event, "FILE:", vim.fn.expand('%:t'))
-          break
-        end
-      end
+      print("EVENT DEBUG:", ev.event, "FILE:", vim.fn.expand('%:t'))
     end,
   })
   
