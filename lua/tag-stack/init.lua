@@ -21,6 +21,12 @@ local state = {
   stacks = {}, -- Multiple named stacks: { stack_id = { name, items, current_idx } }
   active_stack_id = nil,
   next_stack_id = 1,
+  -- Performance optimization state
+  last_update_time = 0,
+  last_tag_stack = nil,
+  update_timer = nil,
+  cached_display = nil,
+  last_highlights = nil,
 }
 
 -- Setup function
@@ -54,16 +60,19 @@ function M.setup(opts)
     end,
   })
   
-  -- Listen for tag jumps and updates
-  vim.api.nvim_create_autocmd({'BufEnter', 'CursorHold'}, {
+  -- Listen for tag jumps with debounced updates
+  vim.api.nvim_create_autocmd({'BufEnter'}, {
     group = augroup,
     callback = function()
-      M.detect_stack_changes()
-      if state.is_visible then
-        M.update_display()
-      elseif state.config.auto_show and (M.has_tag_stack() or state.active_stack_id) then
-        M.show()
-      end
+      M.debounced_update()
+    end,
+  })
+  
+  -- Only use CursorHold for less frequent checks
+  vim.api.nvim_create_autocmd({'CursorHold'}, {
+    group = augroup,
+    callback = function()
+      M.debounced_update(500) -- Longer delay for cursor hold
     end,
   })
   
@@ -120,6 +129,9 @@ function M.clear()
   end
   -- Clear Neovim's tag stack
   vim.fn.settagstack(vim.fn.winnr(), {items = {}, curidx = 1})
+  -- Clear cache
+  state.cached_display = nil
+  state.last_tag_stack = nil
   if state.is_visible then
     M.update_display()
   end
@@ -142,6 +154,9 @@ function M.new_stack()
   
   state.active_stack_id = stack_id
   
+  -- Clear cache since we created a new stack
+  state.cached_display = nil
+  
   if state.is_visible then
     M.update_display()
   end
@@ -162,6 +177,9 @@ function M.next_stack()
   
   local next_idx = (current_idx % #stack_ids) + 1
   state.active_stack_id = stack_ids[next_idx]
+  
+  -- Clear cache since we switched stacks
+  state.cached_display = nil
   
   if state.is_visible then
     M.update_display()
@@ -184,14 +202,63 @@ function M.prev_stack()
   local prev_idx = current_idx == 1 and #stack_ids or current_idx - 1
   state.active_stack_id = stack_ids[prev_idx]
   
+  -- Clear cache since we switched stacks
+  state.cached_display = nil
+  
   if state.is_visible then
     M.update_display()
   end
 end
 
+-- Debounced update function
+function M.debounced_update(delay)
+  delay = delay or 50 -- Default 50ms delay
+  
+  -- Cancel existing timer
+  if state.update_timer then
+    vim.fn.timer_stop(state.update_timer)
+  end
+  
+  -- Schedule new update
+  state.update_timer = vim.fn.timer_start(delay, function()
+    state.update_timer = nil
+    M.detect_stack_changes()
+    if state.is_visible then
+      M.update_display()
+    elseif state.config.auto_show and (M.has_tag_stack() or state.active_stack_id) then
+      M.show()
+    end
+  end)
+end
+
 -- Detect changes in tag stack and manage multiple stacks
 function M.detect_stack_changes()
   local current_tag_stack = vim.fn.gettagstack()
+  
+  -- Quick comparison with cached state - avoid expensive operations if nothing changed
+  if state.last_tag_stack and 
+     current_tag_stack.curidx == state.last_tag_stack.curidx and
+     #current_tag_stack.items == #state.last_tag_stack.items then
+    -- Check if items are the same by comparing first and last items
+    if #current_tag_stack.items > 0 then
+      local first_same = current_tag_stack.items[1] and state.last_tag_stack.items[1] and
+                        current_tag_stack.items[1].tagname == state.last_tag_stack.items[1].tagname
+      local last_same = true
+      if #current_tag_stack.items > 1 then
+        local last_idx = #current_tag_stack.items
+        last_same = current_tag_stack.items[last_idx] and state.last_tag_stack.items[last_idx] and
+                   current_tag_stack.items[last_idx].tagname == state.last_tag_stack.items[last_idx].tagname
+      end
+      if first_same and last_same then
+        return -- No changes detected
+      end
+    else
+      return -- Both empty, no changes
+    end
+  end
+  
+  -- Cache current state for next comparison
+  state.last_tag_stack = vim.deepcopy(current_tag_stack)
   
   -- If no active stack, create one
   if not state.active_stack_id then
@@ -227,6 +294,9 @@ function M.detect_stack_changes()
   -- Update current stack with tag stack data
   active_stack.items = current_tag_stack.items or {}
   active_stack.current_idx = current_tag_stack.curidx or 0
+  
+  -- Clear cached display since data changed
+  state.cached_display = nil
 end
 
 -- Check if there's a meaningful tag stack
@@ -294,7 +364,25 @@ function M.update_display()
     return
   end
   
+  -- Use cached display if available and valid
+  if state.cached_display then
+    local lines, highlights = state.cached_display.lines, state.cached_display.highlights
+    
+    -- Only update if content actually changed
+    local current_lines = vim.api.nvim_buf_get_lines(state.panel_buf, 0, -1, false)
+    if not M.lines_equal(current_lines, lines) then
+      vim.api.nvim_buf_set_option(state.panel_buf, 'modifiable', true)
+      vim.api.nvim_buf_set_lines(state.panel_buf, 0, -1, false, lines)
+      vim.api.nvim_buf_set_option(state.panel_buf, 'modifiable', false)
+      M.apply_highlights(highlights)
+    end
+    return
+  end
+  
   local lines, highlights = M.format_all_stacks()
+  
+  -- Cache the formatted display
+  state.cached_display = { lines = lines, highlights = highlights }
   
   -- Update buffer content
   vim.api.nvim_buf_set_option(state.panel_buf, 'modifiable', true)
@@ -305,15 +393,53 @@ function M.update_display()
   M.apply_highlights(highlights)
 end
 
--- Apply syntax highlighting
-function M.apply_highlights(highlights)
-  -- Clear existing highlights
-  vim.api.nvim_buf_clear_namespace(state.panel_buf, 0, 0, -1)
-  
-  -- Apply new highlights
-  for _, hl in ipairs(highlights) do
-    vim.api.nvim_buf_add_highlight(state.panel_buf, 0, hl.group, hl.line, hl.col_start, hl.col_end)
+-- Compare two line arrays for equality
+function M.lines_equal(lines1, lines2)
+  if #lines1 ~= #lines2 then
+    return false
   end
+  
+  for i = 1, #lines1 do
+    if lines1[i] ~= lines2[i] then
+      return false
+    end
+  end
+  
+  return true
+end
+
+-- Apply syntax highlighting with caching
+function M.apply_highlights(highlights)
+  -- Only clear and reapply if highlights actually changed
+  if not state.last_highlights or not M.highlights_equal(state.last_highlights, highlights) then
+    -- Clear existing highlights
+    vim.api.nvim_buf_clear_namespace(state.panel_buf, 0, 0, -1)
+    
+    -- Apply new highlights
+    for _, hl in ipairs(highlights) do
+      vim.api.nvim_buf_add_highlight(state.panel_buf, 0, hl.group, hl.line, hl.col_start, hl.col_end)
+    end
+    
+    -- Cache current highlights
+    state.last_highlights = vim.deepcopy(highlights)
+  end
+end
+
+-- Compare two highlight arrays for equality
+function M.highlights_equal(hl1, hl2)
+  if #hl1 ~= #hl2 then
+    return false
+  end
+  
+  for i = 1, #hl1 do
+    local h1, h2 = hl1[i], hl2[i]
+    if h1.group ~= h2.group or h1.line ~= h2.line or 
+       h1.col_start ~= h2.col_start or h1.col_end ~= h2.col_end then
+      return false
+    end
+  end
+  
+  return true
 end
 
 -- Format all stacks for display
