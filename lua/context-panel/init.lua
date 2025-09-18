@@ -27,7 +27,7 @@ local default_config = {
       min_chars = 2,
       auto_preview = false,
       preview_delay = 300,
-      sources = {'lsp', 'buffer', 'snippet'},
+      sources = {'lsp', 'buffer', 'snippet', 'file'},
     }
   }
 }
