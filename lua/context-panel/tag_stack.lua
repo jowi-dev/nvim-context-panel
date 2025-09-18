@@ -42,20 +42,29 @@ function M.setup(config)
     end,
   })
   
-  -- Listen for tag jumps - use specific events that indicate tag navigation
-  vim.api.nvim_create_autocmd({'BufEnter'}, {
+  -- Listen for tag jumps - use comprehensive events that catch tag navigation
+  vim.api.nvim_create_autocmd({'BufEnter', 'WinEnter', 'BufRead', 'TabEnter'}, {
     group = augroup,
     callback = function()
       M.detect_stack_changes()
     end,
   })
   
-  -- Also listen for direct tag stack changes (this catches C-] and C-t)
-  vim.api.nvim_create_autocmd({'User'}, {
+  -- Test what events actually fire during tag navigation (temporary debug)
+  vim.api.nvim_create_autocmd({'*'}, {
     group = augroup,
-    pattern = 'TagStackChanged',
-    callback = function()
-      M.detect_stack_changes()
+    callback = function(ev)
+      -- Only log events that might be relevant to avoid spam
+      local relevant_events = {
+        'BufEnter', 'WinEnter', 'BufRead', 'TabEnter', 'BufWinEnter',
+        'User', 'TagStackPush', 'TagStackPop', 'BufLeave', 'WinLeave'
+      }
+      for _, event in ipairs(relevant_events) do
+        if ev.event == event then
+          print("EVENT DEBUG:", ev.event, "FILE:", vim.fn.expand('%:t'))
+          break
+        end
+      end
     end,
   })
   
