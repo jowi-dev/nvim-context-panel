@@ -225,7 +225,7 @@ function M.debounced_update(delay)
     M.detect_stack_changes()
     if state.is_visible then
       M.update_display()
-    elseif state.config.auto_show and (M.has_tag_stack() or state.active_stack_id) then
+    elseif state.config.auto_show and state.active_stack_id then
       M.show()
     end
   end)
@@ -277,14 +277,16 @@ function M.detect_stack_changes()
     -- Back at root - check if we should start a new stack on next jump
     active_stack.at_root = true
   elseif active_stack.at_root and current_tag_stack.curidx > 0 then
-    -- We were at root and now have jumped - this might be a new path
+    -- We were at root and now have jumped - check if this is a different path than before
     local current_item = current_tag_stack.items[current_tag_stack.curidx]
     local last_known = active_stack.items[1]
     
+    -- Only create new stack if we had previous items and this is a different path
+    -- If last_known is nil, this is our first jump from root, so continue with current stack
     if last_known and current_item and 
        (current_item.tagname ~= last_known.tagname or 
         current_item.from[1] ~= last_known.from[1]) then
-      -- Different path - create new stack
+      -- Different path from previous - create new stack
       M.new_stack()
       return
     end
