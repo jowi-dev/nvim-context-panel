@@ -42,13 +42,13 @@ function M.setup(config)
     end,
   })
   
-  -- Listen for tag jumps - use comprehensive events that catch tag navigation
-  vim.api.nvim_create_autocmd({'BufEnter', 'WinEnter', 'BufRead', 'TabEnter'}, {
-    group = augroup,
-    callback = function()
-      M.detect_stack_changes()
-    end,
-  })
+--  -- Listen for tag jumps - use comprehensive events that catch tag navigation
+--  vim.api.nvim_create_autocmd({'BufEnter', 'WinEnter', 'BufRead', 'TabEnter'}, {
+--    group = augroup,
+--    callback = function()
+--      M.detect_stack_changes()
+--    end,
+--  })
   
   -- Test what events actually fire during tag navigation (temporary debug)
   vim.api.nvim_create_autocmd({
@@ -58,16 +58,17 @@ function M.setup(config)
     group = augroup,
     callback = function(ev)
       print("EVENT DEBUG:", ev.event, "FILE:", vim.fn.expand('%:t'))
+      M.detect_stack_changes()
     end,
   })
   
   -- Fallback with shorter delay for any missed updates
-  vim.api.nvim_create_autocmd({'CursorHold'}, {
-    group = augroup,
-    callback = function()
-      M.detect_stack_changes()
-    end,
-  })
+--  vim.api.nvim_create_autocmd({'CursorHold'}, {
+--    group = augroup,
+--    callback = function()
+--      M.detect_stack_changes()
+--    end,
+--  })
 end
 
 -- Clear the current tag stack
@@ -140,18 +141,15 @@ end
 
 -- Detect changes in tag stack and manage multiple stacks
 function M.detect_stack_changes()
-  print("DEBUG: detect_stack_changes() called at:", vim.fn.reltimestr(vim.fn.reltime()))
   local current_tag_stack = vim.fn.gettagstack()
-  print("DEBUG: gettagstack() completed at:", vim.fn.reltimestr(vim.fn.reltime()))
   
-  -- Debug tag stack state
-  print("DEBUG: Tag stack - curidx:", current_tag_stack.curidx, "items:", #current_tag_stack.items)
-  for i, item in ipairs(current_tag_stack.items or {}) do
-    local tagname = item.tagname or "unknown"
-    local from_buf = item.from and item.from[1] and vim.api.nvim_buf_get_name(item.from[1]) or "unknown"
-    local filename = vim.fn.fnamemodify(from_buf, ':t')
-    print(string.format("DEBUG:   [%d] %s (from %s)", i, tagname, filename))
+  -- Single line debug output to avoid ENTER prompts
+  local debug_msg = string.format("DEBUG: detect_stack_changes() - curidx:%d items:%d", 
+                                  current_tag_stack.curidx, #current_tag_stack.items)
+  if #current_tag_stack.items > 0 then
+    debug_msg = debug_msg .. " top:" .. (current_tag_stack.items[#current_tag_stack.items].tagname or "unknown")
   end
+  print(debug_msg)
   
   -- Quick comparison with cached state
   if state.last_tag_stack and 
