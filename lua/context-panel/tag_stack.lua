@@ -144,6 +144,15 @@ function M.detect_stack_changes()
   local current_tag_stack = vim.fn.gettagstack()
   print("DEBUG: gettagstack() completed at:", vim.fn.reltimestr(vim.fn.reltime()))
   
+  -- Debug tag stack state
+  print("DEBUG: Tag stack - curidx:", current_tag_stack.curidx, "items:", #current_tag_stack.items)
+  for i, item in ipairs(current_tag_stack.items or {}) do
+    local tagname = item.tagname or "unknown"
+    local from_buf = item.from and item.from[1] and vim.api.nvim_buf_get_name(item.from[1]) or "unknown"
+    local filename = vim.fn.fnamemodify(from_buf, ':t')
+    print(string.format("DEBUG:   [%d] %s (from %s)", i, tagname, filename))
+  end
+  
   -- Quick comparison with cached state
   if state.last_tag_stack and 
      current_tag_stack.curidx == state.last_tag_stack.curidx and
