@@ -1,29 +1,54 @@
-# Elixir Tag Stack Visualizer - Neovim Plugin Requirements
+# Context Panel Plugin - Neovim Plugin Requirements
 
 ## Project Overview
-Build a Neovim plugin that visualizes the current tag navigation stack as a vertical flowchart in a side panel, specifically optimized for Elixir development workflows.
+Build a unified Neovim plugin that provides a right-side context panel with two integrated modules: tag navigation visualization (optimized for Elixir) and intelligent code completions.
 
 ## Core Functionality Requirements
 
-### 1. Stack Management
+### 1. Modular Architecture
+- **Unified Panel**: Single floating window split into configurable sections
+- **Module System**: Enable/disable tag stack and completion modules independently
+- **Shared Configuration**: One setup call configures both modules
+- **Easy Installation**: Single plugin installation with optional features
+
+### 2. Tag Stack Module (existing functionality)
 - **Root Initialization**: When a file is opened with `:e` command, it becomes the root/top of the stack
 - **Stack Building**: Each `C-]` (tag jump) adds a new level to the visualization stack
 - **Stack Navigation**: `C-t` (tag pop) moves back up the stack and updates the visualization
-- **Real-time Updates**: Side panel updates immediately on tag navigation events
+- **Real-time Updates**: Panel updates immediately on tag navigation events
 
-### 2. Visualization Requirements
-- **Side Panel**: Display as a vertical panel on the right side of Neovim
-- **Flowchart Format**: Show hierarchical flow from top (root file) downward to current position
-- **Current Position Indicator**: Clearly mark where the user currently is in the stack
-- **File Context**: Show filename, line number, and function/module context for each level
+### 3. Completion Module (new functionality)
+- **Right-side List**: Show completions in numbered/lettered list with quick selection keys
+- **Live Updates**: Update completions as user types in insert mode
+- **Multiple Sources**: Integrate LSP, buffer, and snippet completions
+- **Optional Preview**: Floating window to the left showing function details/documentation
+- **Non-intrusive**: No focus stealing, no dropdown overlays
 
-### 3. Technical Integration
-- **Tag Stack Integration**: Hook into Neovim's built-in tag stack (`:echo tagstack()`)
-- **Ctags Dependency**: Parse and utilize ctags output for symbol information
-- **Event Handling**: Listen for tag navigation events to trigger updates
-- **Buffer Management**: Handle multiple buffers/files gracefully
+## Visualization Requirements
 
-## Elixir-Specific Requirements
+### 1. Panel Layout
+```
+┌─────────────────────────────────┐
+│ Completions (40% height)        │
+│ 1. useState                     │
+│ 2. useEffect                    │
+│ 3. useCallback                  │
+├─────────────────────────────────┤
+│ Tag Stack (60% height)          │
+│ 📁 my_app.ex:45                 │
+│ │  └─ MyApp.Server              │
+│ │     └─ handle_call/3:78       │
+│ │        └─ process_request/2   │
+└─────────────────────────────────┘
+```
+
+### 2. Panel Behavior
+- **Toggle Command**: Show/hide entire panel or individual modules
+- **Resize Support**: Configurable width and height ratios
+- **Auto-positioning**: Automatically positions to avoid conflicts
+- **Responsive Layout**: Adapts when only one module is enabled
+
+## Elixir-Specific Requirements (Tag Stack Module)
 
 ### 1. Symbol Recognition
 - Parse Elixir module names (`MyApp.Module`)
@@ -36,89 +61,129 @@ Build a Neovim plugin that visualizes the current tag navigation stack as a vert
 - Parse `mix.exs` and application structure if available
 - Handle umbrella applications appropriately
 
-## User Interface Specifications
+## Completion System Requirements
 
-### 1. Display Format
-```
-📁 my_app.ex:45
-│  └─ MyApp.Server
-│     └─ handle_call/3:78
-│        └─ process_request/2:156
-│           └─ validate_params/1:201  ← [current]
-```
+### 1. Completion Sources
+- **LSP Integration**: Primary source for intelligent completions
+- **Buffer Words**: Fallback for non-LSP environments
+- **Snippet Integration**: Support for common code snippets
+- **File Path Completion**: For imports and requires
 
-### 2. Panel Behavior
-- **Toggle Command**: Provide command to show/hide the panel
-- **Resize Support**: Allow manual resizing of the panel width
-- **Auto-update**: Automatically refresh when navigating tags
-- **Scroll Support**: Handle long stacks that exceed panel height
+### 2. Selection Interface
+- **Quick Keys**: Number keys (1-9) and letters (a-z) for instant selection
+- **Preview on Demand**: Optional floating preview window with function signatures
+- **Context Awareness**: Filter completions based on current context
 
 ## Commands and Keybindings
 
-### 1. Required Commands
-- `:TagStackShow` - Show/toggle the tag stack panel
-- `:TagStackHide` - Hide the tag stack panel
-- `:TagStackClear` - Clear the current stack and start fresh
+### 1. Panel Commands
+- `:ContextPanelToggle` - Show/hide entire panel
+- `:ContextPanelShow` - Show panel
+- `:ContextPanelHide` - Hide panel
 
-### 2. Suggested Default Keybindings
-- `<leader>ts` - Toggle tag stack panel
-- `<leader>tc` - Clear tag stack
+### 2. Module Commands
+- `:TagStackToggle` - Toggle just tag stack section
+- `:CompletionToggle` - Toggle just completion section
+- `:TagStackClear` - Clear current tag stack
+
+### 3. Completion Commands
+- `:CompletionPreview` - Show/hide preview window
+- `<C-1>` through `<C-9>` - Select completion by number
+- `<C-p>` - Toggle preview for current completion
 
 ## Configuration Options
 
 ### 1. Panel Settings
-- `width` - Panel width (default: 40 characters)
-- `position` - Panel position ('right' or 'left', default: 'right')
-- `auto_show` - Auto-show panel on first tag jump (default: true)
+```lua
+require('context-panel').setup({
+  panel = {
+    width = 40,
+    position = 'right',
+    auto_show = true,
+  },
+  modules = {
+    tag_stack = {
+      enabled = true,
+      height_ratio = 0.6,
+      show_line_numbers = true,
+      show_arity = true,
+      max_stack_depth = 20,
+    },
+    completions = {
+      enabled = true,
+      height_ratio = 0.4,
+      max_items = 12,
+      show_preview = true,
+      preview_position = 'left',
+      quick_select_keys = '123456789abcdef',
+    }
+  }
+})
+```
 
-### 2. Display Options
-- `show_line_numbers` - Show line numbers in stack (default: true)
-- `show_file_path` - Show full or relative file paths (default: 'relative')
-- `max_stack_depth` - Maximum levels to display (default: 20)
+### 2. Completion Settings
+- `sources` - Priority order of completion sources
+- `min_chars` - Minimum characters before showing completions
+- `auto_preview` - Automatically show preview on selection
+- `preview_delay` - Delay before showing preview (ms)
 
-### 3. Elixir-Specific Options
-- `show_arity` - Show function arity in display (default: true)
-- `show_module_path` - Show full module paths (default: true)
-
-## Future Extension Points
-
-### 1. Sibling Support (Phase 2)
-- Show related test files (`*_test.exs`) at each level
-- Display related modules in the same application
-- Show GenServer callback relationships
-
-### 2. Enhanced Visualization (Phase 3)
-- Color coding for different symbol types
-- Minimap-style overview for very deep stacks
-- Integration with LSP for richer symbol information
-
-## Technical Constraints
+## Technical Requirements
 
 ### 1. Dependencies
-- Requires `ctags` or `universal-ctags` to be installed
-- Must work with Neovim 0.7+
-- Should be implemented in Lua for performance
+- Neovim 0.8+ for floating window APIs
+- Optional: LSP client for intelligent completions
+- Optional: `ctags` for enhanced tag information
+- Lua implementation for performance
 
-### 2. Performance Requirements
-- Panel updates should be instantaneous (<100ms)
-- Should handle large codebases without significant lag
-- Graceful degradation if ctags data is unavailable
+### 2. Performance
+- Panel updates < 100ms
+- Completion filtering < 50ms
+- Graceful handling of large completion lists
+- Memory efficient for long coding sessions
+
+## Installation and Setup
+
+### 1. Plugin Manager Integration
+```lua
+-- Packer
+use 'your-username/nvim-context-panel'
+
+-- Lazy.nvim
+{ 'your-username/nvim-context-panel', config = true }
+```
+
+### 2. Minimal Setup
+```lua
+require('context-panel').setup({
+  -- Uses sensible defaults
+  -- Both modules enabled by default
+})
+```
+
+## Future Extensions
+
+### 1. Additional Modules
+- **Diagnostics Panel**: LSP errors/warnings
+- **Git Status**: File change indicators
+- **Project Files**: Quick file browser
+- **Buffer List**: Open buffer management
+
+### 2. Enhanced Features
+- **Themes**: Customizable color schemes
+- **Layouts**: Horizontal panel option
+- **Integration**: Work with other popular plugins
+- **Export**: Save/restore panel states
 
 ## Error Handling
-- Handle missing ctags gracefully
-- Provide clear error messages for setup issues
-- Fall back to basic file:line display if symbol parsing fails
-
-## Testing Requirements
-- Include sample Elixir project for testing
-- Test with various project structures (standard, umbrella)
-- Test performance with large tag stacks
-- Verify behavior with multiple open buffers
+- Graceful LSP unavailability
+- Fallback completions when sources fail
+- Clear error messages for configuration issues
+- Safe defaults for all options
 
 ---
 
-## Getting Started Notes
-1. Start with basic tag stack integration and simple ASCII visualization
-2. Build the core navigation tracking before adding advanced formatting
-3. Test thoroughly with a real Elixir project during development
-4. Consider using existing Neovim plugin templates/boilerplates for structure
+## Implementation Priority
+1. **Phase 1**: Refactor existing tag stack into modular architecture
+2. **Phase 2**: Add basic completion module with quick selection
+3. **Phase 3**: Implement preview window and advanced completion features
+4. **Phase 4**: Polish UI/UX and add configuration options
