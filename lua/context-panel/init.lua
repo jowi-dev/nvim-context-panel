@@ -206,19 +206,27 @@ end
 -- Debounced update function
 function M.debounced_update(delay)
   delay = delay or 50 -- Default 50ms delay
+  print("DEBUG: debounced_update() started with delay:", delay, "at:", vim.fn.reltimestr(vim.fn.reltime()))
   
   -- Cancel existing timer
   if state.update_timer then
+    print("DEBUG: cancelling existing timer:", state.update_timer)
     vim.fn.timer_stop(state.update_timer)
   end
   
   -- Schedule new update
+  print("DEBUG: scheduling timer at:", vim.fn.reltimestr(vim.fn.reltime()))
   state.update_timer = vim.fn.timer_start(delay, function()
+    print("DEBUG: timer callback fired at:", vim.fn.reltimestr(vim.fn.reltime()))
     state.update_timer = nil
     if state.is_visible then
+      print("DEBUG: calling update_display() at:", vim.fn.reltimestr(vim.fn.reltime()))
       M.update_display()
+    else
+      print("DEBUG: panel not visible, skipping update")
     end
   end)
+  print("DEBUG: timer scheduled with id:", state.update_timer)
 end
 
 -- Check if panel should auto-show
@@ -289,7 +297,9 @@ end
 
 -- Update the display with content from all enabled modules
 function M.update_display()
+  print("DEBUG: update_display() started at:", vim.fn.reltimestr(vim.fn.reltime()))
   if not state.panel_buf or not vim.api.nvim_buf_is_valid(state.panel_buf) then
+    print("DEBUG: panel_buf invalid, returning")
     return
   end
   
@@ -358,6 +368,7 @@ function M.update_display()
   
   -- Apply syntax highlighting
   M.apply_highlights(all_highlights)
+  print("DEBUG: update_display() completed at:", vim.fn.reltimestr(vim.fn.reltime()))
 end
 
 -- Get enabled modules in display order

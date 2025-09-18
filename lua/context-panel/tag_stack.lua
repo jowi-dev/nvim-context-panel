@@ -138,7 +138,9 @@ end
 
 -- Detect changes in tag stack and manage multiple stacks
 function M.detect_stack_changes()
+  print("DEBUG: detect_stack_changes() called at:", vim.fn.reltimestr(vim.fn.reltime()))
   local current_tag_stack = vim.fn.gettagstack()
+  print("DEBUG: gettagstack() completed at:", vim.fn.reltimestr(vim.fn.reltime()))
   
   -- Quick comparison with cached state
   if state.last_tag_stack and 
@@ -201,7 +203,9 @@ function M.detect_stack_changes()
   state.cached_display = nil
   
   -- Use lightweight update request with minimal delay for tag navigation
+  print("DEBUG: calling debounced_update() at:", vim.fn.reltimestr(vim.fn.reltime()))
   require('context-panel').debounced_update(10) -- 10ms instead of default 50ms
+  print("DEBUG: debounced_update() call completed at:", vim.fn.reltimestr(vim.fn.reltime()))
 end
 
 -- Format tag stack display
