@@ -5,7 +5,8 @@ local default_config = {
   panel = {
     width = 40,
     position = 'right', -- 'right' or 'left'
-    auto_show = true,
+    auto_show = false, -- Disable auto-show logic
+    show_on_startup = true, -- Show panel immediately on setup
   },
   modules = {
     tag_stack = {
@@ -66,6 +67,13 @@ function M.setup(opts)
   
   -- Create user commands
   M.create_commands()
+  
+  -- Show panel on startup if configured
+  if state.config.panel.show_on_startup then
+    vim.defer_fn(function()
+      M.show()
+    end, 100) -- Small delay to ensure Neovim is fully loaded
+  end
   
   -- Set up global autocommands
   local augroup = vim.api.nvim_create_augroup('ContextPanel', { clear = true })
@@ -209,8 +217,6 @@ function M.debounced_update(delay)
     state.update_timer = nil
     if state.is_visible then
       M.update_display()
-    elseif state.config.panel.auto_show and M.should_auto_show() then
-      M.show()
     end
   end)
 end

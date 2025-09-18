@@ -23,9 +23,6 @@ function M.setup(config)
       local bufname = vim.api.nvim_buf_get_name(0)
       if not state.active_stack_id and bufname and bufname ~= "" and vim.fn.filereadable(bufname) == 1 then
         M.new_stack()
-        if config.auto_show then
-          require('context-panel').show()
-        end
       end
     end,
   })
