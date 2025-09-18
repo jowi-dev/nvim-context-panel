@@ -140,18 +140,29 @@ end
 function M.detect_stack_changes()
   local current_tag_stack = vim.fn.gettagstack()
   
-  -- Fast comparison - only check key values
+  -- Quick comparison with cached state
   if state.last_tag_stack and 
      current_tag_stack.curidx == state.last_tag_stack.curidx and
      #current_tag_stack.items == #state.last_tag_stack.items then
-    return -- No changes detected
+    if #current_tag_stack.items > 0 then
+      local first_same = current_tag_stack.items[1] and state.last_tag_stack.items[1] and
+                        current_tag_stack.items[1].tagname == state.last_tag_stack.items[1].tagname
+      local last_same = true
+      if #current_tag_stack.items > 1 then
+        local last_idx = #current_tag_stack.items
+        last_same = current_tag_stack.items[last_idx] and state.last_tag_stack.items[last_idx] and
+                   current_tag_stack.items[last_idx].tagname == state.last_tag_stack.items[last_idx].tagname
+      end
+      if first_same and last_same then
+        return -- No changes detected
+      end
+    else
+      return -- Both empty, no changes
+    end
   end
   
-  -- Cache current state (store only what we need for comparison)
-  state.last_tag_stack = {
-    curidx = current_tag_stack.curidx,
-    items = current_tag_stack.items -- Shallow copy is enough for comparison
-  }
+  -- Cache current state for next comparison
+  state.last_tag_stack = vim.deepcopy(current_tag_stack)
   
   -- If no active stack, create one
   if not state.active_stack_id then
