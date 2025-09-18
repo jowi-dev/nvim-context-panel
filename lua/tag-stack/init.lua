@@ -500,8 +500,13 @@ function M.format_all_stacks()
     table.insert(lines, root_line)
     line_num = line_num + 1
     
-    -- Show stack items
-    local items_to_show = math.min(#stack.items, stack.current_idx or 0)
+    -- Show stack items - only show items up to current_idx
+    -- current_idx = 0 means at root (show 0 items)
+    -- current_idx = 1 means at first tag (show 1 item) 
+    -- etc.
+    local current_idx = stack.current_idx or 0
+    local items_to_show = math.min(#stack.items, current_idx)
+    
     for i = 1, items_to_show do
       if i > state.config.max_stack_depth then
         table.insert(lines, "  ... (truncated)")
@@ -510,8 +515,8 @@ function M.format_all_stacks()
       end
       
       local item = stack.items[i]
-      -- Fix: current position is when i equals the current_idx from the tag stack
-      local is_current = is_active and (i == stack.current_idx)
+      -- Current position is when i equals the current_idx (and we're not at root)
+      local is_current = is_active and (i == current_idx) and (current_idx > 0)
       
       -- Get tag info
       local tag_name = item.tagname or ""
