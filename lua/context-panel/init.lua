@@ -338,7 +338,7 @@ function M.update_display()
       current_line = current_line + #lines
       
       -- Pad or truncate to section height if needed
-      while #all_lines - (i == 1 and 0 or 3) < section_height and i < #enabled_modules then
+      while #all_lines - (i == 1 and 0 or 3) < section_height and i < #enabled_modules do
         table.insert(all_lines, "")
         current_line = current_line + 1
       end
