@@ -484,6 +484,19 @@ function M.format_all_stacks()
     -- Show root - get module name from file
     local root_module = M.extract_module_from_file(stack.root_file)
     local root_line = string.format("  %s (root)", root_module)
+    
+    -- Check if we're currently at root (current_idx == 0)
+    local at_root = is_active and (stack.current_idx == 0 or stack.current_idx == nil)
+    if at_root then
+      root_line = root_line .. " ← [current]"
+      table.insert(highlights, {
+        group = 'String',
+        line = line_num,
+        col_start = 0,
+        col_end = #root_line
+      })
+    end
+    
     table.insert(lines, root_line)
     line_num = line_num + 1
     
@@ -497,6 +510,7 @@ function M.format_all_stacks()
       end
       
       local item = stack.items[i]
+      -- Fix: current position is when i equals the current_idx from the tag stack
       local is_current = is_active and (i == stack.current_idx)
       
       -- Get tag info
