@@ -12,6 +12,7 @@ local state = {
   debug_enabled = false,
   event_log = {},
   last_event_time = 0,
+  defer_delay = 50, -- Configurable delay for testing
 }
 
 -- Initialize tag stack module
@@ -62,7 +63,10 @@ function M.setup(config)
     group = augroup,
     callback = function(event_data)
       M.log_event(event_data.event)
-      M.detect_stack_changes()
+      -- Defer stack change detection to allow tag stack to update
+      vim.defer_fn(function()
+        M.detect_stack_changes()
+      end, state.defer_delay)
     end,
   })
   
@@ -107,6 +111,17 @@ function M.setup(config)
     M.setup_medium_events(augroup)
     print("Switched to medium event set: BufEnter, WinEnter")
   end, {})
+  
+  -- Command to adjust defer delay
+  vim.api.nvim_create_user_command('TagStackSetDelay', function(opts)
+    local delay = tonumber(opts.args)
+    if delay and delay >= 0 and delay <= 1000 then
+      state.defer_delay = delay
+      print("Set defer delay to " .. delay .. "ms")
+    else
+      print("Usage: TagStackSetDelay <number> (0-1000ms)")
+    end
+  end, { nargs = 1 })
   
   -- Fallback with shorter delay for any missed updates
 --  vim.api.nvim_create_autocmd({'CursorHold'}, {
@@ -487,7 +502,10 @@ function M.setup_minimal_events(augroup)
     group = augroup,
     callback = function(event_data)
       M.log_event(event_data.event)
-      M.detect_stack_changes()
+      -- Defer stack change detection to allow tag stack to update
+      vim.defer_fn(function()
+        M.detect_stack_changes()
+      end, state.defer_delay)
     end,
   })
 end
@@ -501,7 +519,10 @@ function M.setup_medium_events(augroup)
     group = augroup,
     callback = function(event_data)
       M.log_event(event_data.event)
-      M.detect_stack_changes()
+      -- Defer stack change detection to allow tag stack to update
+      vim.defer_fn(function()
+        M.detect_stack_changes()
+      end, state.defer_delay)
     end,
   })
 end
