@@ -610,30 +610,28 @@ function M.jump_to_position(position)
   -- etc.
   local target_idx = position - 1
   
+  local current_tag_stack = vim.fn.gettagstack()
+  local current_idx = math.max(0, (current_tag_stack.curidx or 1) - 1)
+  
   if target_idx == 0 then
-    -- Jump to root - clear the tag stack
-    vim.fn.settagstack(vim.fn.winnr(), {items = {}, curidx = 1})
-    if stack.root_file and vim.fn.filereadable(stack.root_file) == 1 then
-      vim.cmd('edit ' .. vim.fn.fnameescape(stack.root_file))
-      if stack.root_line then
-        vim.api.nvim_win_set_cursor(0, {stack.root_line, 0})
+    -- Jump to root - use tag stack navigation to get there
+    if current_idx > 0 then
+      -- Go back to the beginning of the tag stack
+      for _ = 1, current_idx do
+        vim.cmd('pop')  -- Go back to root
       end
     end
+    -- If current_idx == 0, we're already at root
   elseif target_idx > 0 and target_idx <= #stack.display_items then
-    -- Jump to specific tag position
-    local current_tag_stack = vim.fn.gettagstack()
-    local current_idx = math.max(0, (current_tag_stack.curidx or 1) - 1)
-    
-    if target_idx > current_idx then
-      -- Need to go deeper - this is tricky since we can't easily reconstruct the path
-      print("Cannot jump forward beyond current tag stack depth")
+    -- Jump to specific tag position using Neovim's tag stack
+    if target_idx > #current_tag_stack.items then
+      print("Cannot jump beyond actual tag stack depth (position " .. position .. " not reachable)")
       return
-    elseif target_idx < current_idx then
-      -- Go back the right number of steps
-      local steps_back = current_idx - target_idx
-      for _ = 1, steps_back do
-        vim.cmd('pop')  -- Use :pop command to go back (equivalent to C-t)
-      end
+    end
+    
+    if target_idx ~= current_idx then
+      -- Use Neovim's built-in tag stack position command for any movement
+      vim.cmd(target_idx .. 'tag')  -- Jump to specific position in tag stack
     end
     -- If target_idx == current_idx, we're already there
   else
