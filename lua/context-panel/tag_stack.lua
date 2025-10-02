@@ -8,6 +8,10 @@ local state = {
   -- Performance optimization state
   last_tag_stack = nil,
   cached_display = nil,
+  -- Debug state
+  debug_enabled = false,
+  event_log = {},
+  last_event_time = 0,
 }
 
 -- Initialize tag stack module
@@ -56,12 +60,53 @@ function M.setup(config)
     'BufLeave', 'WinLeave', 'BufNew', 'BufReadPost', 'User'
   }, {
     group = augroup,
-    callback = function()
-      print("EVENT DEBUG: FIRING EVENT")
+    callback = function(event_data)
+      M.log_event(event_data.event)
       M.detect_stack_changes()
-      --require('context-panel').request_update()
     end,
   })
+  
+  -- Create debug commands
+  vim.api.nvim_create_user_command('TagStackDebugOn', function()
+    state.debug_enabled = true
+    state.event_log = {}
+    print("Tag stack event debugging enabled")
+  end, {})
+  
+  vim.api.nvim_create_user_command('TagStackDebugOff', function()
+    state.debug_enabled = false
+    print("Tag stack event debugging disabled")
+  end, {})
+  
+  vim.api.nvim_create_user_command('TagStackDebugShow', function()
+    if #state.event_log == 0 then
+      print("No events logged")
+      return
+    end
+    print("Recent events (last 20):")
+    local start_idx = math.max(1, #state.event_log - 19)
+    for i = start_idx, #state.event_log do
+      local entry = state.event_log[i]
+      print(string.format("%d. [+%dms] %s", i, entry.relative_time, entry.event))
+    end
+  end, {})
+  
+  vim.api.nvim_create_user_command('TagStackDebugClear', function()
+    state.event_log = {}
+    print("Event log cleared")
+  end, {})
+  
+  -- Command to switch to minimal event set
+  vim.api.nvim_create_user_command('TagStackUseMinimalEvents', function()
+    M.setup_minimal_events(augroup)
+    print("Switched to minimal event set: BufEnter only")
+  end, {})
+  
+  -- Command to switch to medium event set
+  vim.api.nvim_create_user_command('TagStackUseMediumEvents', function()
+    M.setup_medium_events(augroup)
+    print("Switched to medium event set: BufEnter, WinEnter")
+  end, {})
   
   -- Fallback with shorter delay for any missed updates
 --  vim.api.nvim_create_autocmd({'CursorHold'}, {
@@ -70,6 +115,33 @@ function M.setup(config)
 --      M.detect_stack_changes()
 --    end,
 --  })
+end
+
+-- Log event for debugging
+function M.log_event(event_name)
+  if not state.debug_enabled then
+    return
+  end
+  
+  local current_time = vim.fn.reltimefloat(vim.fn.reltime()) * 1000 -- Convert to ms
+  local relative_time = 0
+  
+  if state.last_event_time > 0 then
+    relative_time = math.floor(current_time - state.last_event_time)
+  end
+  
+  table.insert(state.event_log, {
+    event = event_name,
+    relative_time = relative_time,
+    timestamp = current_time
+  })
+  
+  state.last_event_time = current_time
+  
+  -- Keep only last 50 events to prevent memory bloat
+  if #state.event_log > 50 then
+    table.remove(state.event_log, 1)
+  end
 end
 
 -- Clear the current tag stack
@@ -404,6 +476,34 @@ end
 function M.has_tag_stack()
   local tag_stack = vim.fn.gettagstack()
   return tag_stack and tag_stack.items and #tag_stack.items > 0
+end
+
+-- Setup minimal event set for testing
+function M.setup_minimal_events(augroup)
+  vim.api.nvim_clear_autocmds({ group = augroup })
+  
+  -- Only BufEnter
+  vim.api.nvim_create_autocmd('BufEnter', {
+    group = augroup,
+    callback = function(event_data)
+      M.log_event(event_data.event)
+      M.detect_stack_changes()
+    end,
+  })
+end
+
+-- Setup medium event set for testing
+function M.setup_medium_events(augroup)
+  vim.api.nvim_clear_autocmds({ group = augroup })
+  
+  -- BufEnter and WinEnter
+  vim.api.nvim_create_autocmd({'BufEnter', 'WinEnter'}, {
+    group = augroup,
+    callback = function(event_data)
+      M.log_event(event_data.event)
+      M.detect_stack_changes()
+    end,
+  })
 end
 
 return M
