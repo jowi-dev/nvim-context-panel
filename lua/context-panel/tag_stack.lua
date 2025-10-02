@@ -614,24 +614,49 @@ function M.jump_to_position(position)
   local current_idx = math.max(0, (current_tag_stack.curidx or 1) - 1)
   
   if target_idx == 0 then
-    -- Jump to root - use tag stack navigation to get there
-    if current_idx > 0 then
-      -- Go back to the beginning of the tag stack
-      for _ = 1, current_idx do
-        vim.cmd('pop')  -- Go back to root
+    -- Jump to root - set tag stack position to 0
+    if #current_tag_stack.items > 0 then
+      vim.fn.settagstack(vim.fn.winnr(), {
+        items = current_tag_stack.items,
+        curidx = 1  -- Position 1 means "before first tag" (root)
+      })
+      -- Navigate to the root file if available
+      if stack.root_file and vim.fn.filereadable(stack.root_file) == 1 then
+        vim.cmd('edit ' .. vim.fn.fnameescape(stack.root_file))
+        if stack.root_line then
+          vim.api.nvim_win_set_cursor(0, {stack.root_line, 0})
+        end
       end
     end
-    -- If current_idx == 0, we're already at root
   elseif target_idx > 0 and target_idx <= #stack.display_items then
-    -- Jump to specific tag position using Neovim's tag stack
+    -- Jump to specific tag position by setting tag stack position directly
     if target_idx > #current_tag_stack.items then
       print("Cannot jump beyond actual tag stack depth (position " .. position .. " not reachable)")
       return
     end
     
     if target_idx ~= current_idx then
-      -- Use Neovim's built-in tag stack position command for any movement
-      vim.cmd(target_idx .. 'tag')  -- Jump to specific position in tag stack
+      -- Set the tag stack position directly and navigate to that tag
+      vim.fn.settagstack(vim.fn.winnr(), {
+        items = current_tag_stack.items,
+        curidx = target_idx + 1  -- curidx is 1-based, target_idx is 0-based
+      })
+      
+      -- Navigate to the target tag's location
+      local target_item = current_tag_stack.items[target_idx]
+      if target_item and target_item.from then
+        local bufnr = target_item.from[1]
+        local line = target_item.from[2]
+        local col = target_item.from[3]
+        
+        -- Switch to the correct buffer
+        if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+          vim.api.nvim_set_current_buf(bufnr)
+          if line then
+            vim.api.nvim_win_set_cursor(0, {line, col or 0})
+          end
+        end
+      end
     end
     -- If target_idx == current_idx, we're already there
   else
