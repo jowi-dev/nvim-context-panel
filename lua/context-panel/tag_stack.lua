@@ -231,13 +231,15 @@ end
 function M.detect_stack_changes()
   local current_tag_stack = vim.fn.gettagstack()
   
-  -- Single line debug output to avoid ENTER prompts
-  local debug_msg = string.format("DEBUG: detect_stack_changes() - curidx:%d items:%d", 
-                                  current_tag_stack.curidx, #current_tag_stack.items)
-  if #current_tag_stack.items > 0 then
-    debug_msg = debug_msg .. " top:" .. (current_tag_stack.items[#current_tag_stack.items].tagname or "unknown")
+  -- Debug output only when debugging is enabled
+  if state.debug_enabled then
+    local debug_msg = string.format("DEBUG: detect_stack_changes() - curidx:%d items:%d", 
+                                    current_tag_stack.curidx, #current_tag_stack.items)
+    if #current_tag_stack.items > 0 then
+      debug_msg = debug_msg .. " top:" .. (current_tag_stack.items[#current_tag_stack.items].tagname or "unknown")
+    end
+    print(debug_msg)
   end
-  print(debug_msg)
   
   -- Quick comparison with cached state
   if state.last_tag_stack and 
@@ -300,9 +302,13 @@ function M.detect_stack_changes()
   state.cached_display = nil
   
   -- Use lightweight update request with minimal delay for tag navigation
-  print("DEBUG: calling debounced_update() at:", vim.fn.reltimestr(vim.fn.reltime()))
+  if state.debug_enabled then
+    print("DEBUG: calling debounced_update() at:", vim.fn.reltimestr(vim.fn.reltime()))
+  end
   require('context-panel').debounced_update(10) -- 10ms instead of default 50ms
-  print("DEBUG: debounced_update() call completed at:", vim.fn.reltimestr(vim.fn.reltime()))
+  if state.debug_enabled then
+    print("DEBUG: debounced_update() call completed at:", vim.fn.reltimestr(vim.fn.reltime()))
+  end
 end
 
 -- Format tag stack display

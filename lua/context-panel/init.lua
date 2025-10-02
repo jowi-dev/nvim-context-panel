@@ -41,6 +41,7 @@ local state = {
   is_visible = false,
   update_timer = nil,
   last_update_time = 0,
+  debug_enabled = false, -- Add debug flag
   modules = {
     tag_stack = nil,
     completion = nil,
@@ -136,6 +137,25 @@ function M.create_commands()
   -- Legacy commands for backwards compatibility
   vim.api.nvim_create_user_command('TagStackShow', M.show, {})
   vim.api.nvim_create_user_command('TagStackHide', M.hide, {})
+  
+  -- Main panel debug commands
+  vim.api.nvim_create_user_command('ContextPanelDebugOn', function()
+    state.debug_enabled = true
+    -- Also enable tag stack debugging if available
+    if state.modules.tag_stack and state.modules.tag_stack.log_event then
+      vim.cmd('TagStackDebugOn')
+    end
+    print("Context panel debugging enabled")
+  end, {})
+  
+  vim.api.nvim_create_user_command('ContextPanelDebugOff', function()
+    state.debug_enabled = false
+    -- Also disable tag stack debugging if available
+    if state.modules.tag_stack and state.modules.tag_stack.log_event then
+      vim.cmd('TagStackDebugOff')
+    end
+    print("Context panel debugging disabled")
+  end, {})
 end
 
 -- Show the context panel
@@ -206,32 +226,46 @@ end
 -- Debounced update function
 function M.debounced_update(delay)
   delay = delay or 50 -- Default 50ms delay
-  print("DEBUG: debounced_update() started with delay:", delay, "at:", vim.fn.reltimestr(vim.fn.reltime()))
+  if state.debug_enabled then
+    print("DEBUG: debounced_update() started with delay:", delay, "at:", vim.fn.reltimestr(vim.fn.reltime()))
+  end
   
   -- Cancel existing timer
   if state.update_timer then
-    print("DEBUG: cancelling existing timer:", state.update_timer)
+    if state.debug_enabled then
+      print("DEBUG: cancelling existing timer:", state.update_timer)
+    end
     vim.fn.timer_stop(state.update_timer)
   end
   
   -- Schedule new update
-  print("DEBUG: scheduling timer at:", vim.fn.reltimestr(vim.fn.reltime()))
-  print("DEBUG: panel visible?", state.is_visible)
+  if state.debug_enabled then
+    print("DEBUG: scheduling timer at:", vim.fn.reltimestr(vim.fn.reltime()))
+    print("DEBUG: panel visible?", state.is_visible)
+  end
   state.update_timer = vim.fn.timer_start(delay, function()
-    print("DEBUG: *** TIMER CALLBACK FIRED ***")
+    if state.debug_enabled then
+      print("DEBUG: *** TIMER CALLBACK FIRED ***")
+    end
     state.update_timer = nil
     if state.is_visible then
-      print("DEBUG: calling update_display() at:", vim.fn.reltimestr(vim.fn.reltime()))
+      if state.debug_enabled then
+        print("DEBUG: calling update_display() at:", vim.fn.reltimestr(vim.fn.reltime()))
+      end
       M.update_display()
     else
-      print("DEBUG: panel not visible, skipping update")
+      if state.debug_enabled then
+        print("DEBUG: panel not visible, skipping update")
+      end
     end
   end)
-  print("DEBUG: timer scheduled with id:", state.update_timer)
-  
-  -- Test if timer is valid immediately
-  local timer_info = vim.fn.timer_info(state.update_timer)
-  print("DEBUG: timer info:", vim.inspect(timer_info))
+  if state.debug_enabled then
+    print("DEBUG: timer scheduled with id:", state.update_timer)
+    
+    -- Test if timer is valid immediately
+    local timer_info = vim.fn.timer_info(state.update_timer)
+    print("DEBUG: timer info:", vim.inspect(timer_info))
+  end
 end
 
 -- Check if panel should auto-show
@@ -302,9 +336,13 @@ end
 
 -- Update the display with content from all enabled modules
 function M.update_display()
-  print("DEBUG: update_display() started at:", vim.fn.reltimestr(vim.fn.reltime()))
+  if state.debug_enabled then
+    print("DEBUG: update_display() started at:", vim.fn.reltimestr(vim.fn.reltime()))
+  end
   if not state.panel_buf or not vim.api.nvim_buf_is_valid(state.panel_buf) then
-    print("DEBUG: panel_buf invalid, returning")
+    if state.debug_enabled then
+      print("DEBUG: panel_buf invalid, returning")
+    end
     return
   end
   
@@ -373,7 +411,9 @@ function M.update_display()
   
   -- Apply syntax highlighting
   M.apply_highlights(all_highlights)
-  print("DEBUG: update_display() completed at:", vim.fn.reltimestr(vim.fn.reltime()))
+  if state.debug_enabled then
+    print("DEBUG: update_display() completed at:", vim.fn.reltimestr(vim.fn.reltime()))
+  end
 end
 
 -- Get enabled modules in display order
