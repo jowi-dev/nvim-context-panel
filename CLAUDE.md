@@ -38,13 +38,13 @@ Build a unified Neovim plugin that provides a right-side context panel with two 
 │ 3. useCallback                  │
 ├─────────────────────────────────┤
 │ Tag Stack (60% height)          │
-│ 📁 Tag Stacks:                  │
+│ 📁 Tag Stacks: (Alt-# to jump)  │
 │ ▶ MyApp                         │
-│   MyApp (root) ← [current]      │
+│   1. MyApp (root) ← [current]   │
 │   ↓                             │
-│   MyApp.Server.handle_call/3    │
+│   2. MyApp.Server.handle_call/3 │
 │   ↓                             │
-│   MyApp.process_request/2       │
+│   3. MyApp.process_request/2    │
 └─────────────────────────────────┘
 ```
 
@@ -99,6 +99,12 @@ Build a unified Neovim plugin that provides a right-side context panel with two 
 - `:CompletionPreview` - Show/hide preview window
 - `<C-1>` through `<C-9>` - Select completion by number
 - `<C-p>` - Toggle preview for current completion
+
+### 4. Tag Stack Navigation
+- `<Alt-1>` through `<Alt-9>` - Jump directly to tag stack position
+- `<Alt-1>` - Jump to root file
+- `<Alt-2>` - Jump to first tag in stack
+- `<Alt-3>` - Jump to second tag in stack, etc.
 
 ## Configuration Options
 

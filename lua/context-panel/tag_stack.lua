@@ -145,6 +145,9 @@ function M.setup(config)
     end
   end, {})
   
+  -- Set up quick navigation keybindings
+  M.setup_keybindings()
+  
   -- Fallback with shorter delay for any missed updates
 --  vim.api.nvim_create_autocmd({'CursorHold'}, {
 --    group = augroup,
@@ -352,7 +355,7 @@ function M.format_display(config)
   local line_num = 0
   
   -- Header
-  table.insert(lines, "📁 Tag Stacks:")
+  table.insert(lines, "📁 Tag Stacks: (Alt-# to jump)")
   line_num = line_num + 1
   
   -- Force create a stack if none exists for current file
@@ -393,9 +396,9 @@ function M.format_display(config)
     end
     line_num = line_num + 1
     
-    -- Show root
+    -- Show root with position number
     local root_module = M.extract_module_from_file(stack.root_file)
-    local root_line = string.format("  %s (root)", root_module)
+    local root_line = string.format("  1. %s (root)", root_module)
     
     local at_root = is_active and (stack.current_idx == 0)
     if at_root then
@@ -434,7 +437,8 @@ function M.format_display(config)
       -- Extract module and function from tag
       local display_name = M.format_elixir_tag_display(tag_name, item)
       
-      local line = "  " .. display_name
+      -- Add position number (i+1 because root is position 1)
+      local line = string.format("  %d. %s", i + 1, display_name)
       
       if is_current then
         line = line .. " ← [current]"
@@ -573,6 +577,70 @@ function M.update_persistent_stack(stack, current_items, current_idx)
   for i = 1, current_idx do
     if current_items[i] and not stack.display_items[i] then
       stack.display_items[i] = vim.deepcopy(current_items[i])
+    end
+  end
+end
+
+-- Set up quick navigation keybindings
+function M.setup_keybindings()
+  -- Alt-1 through Alt-9 for quick navigation
+  for i = 1, 9 do
+    local keymap = '<A-' .. i .. '>'
+    vim.keymap.set('n', keymap, function()
+      M.jump_to_position(i)
+    end, { silent = true, desc = 'Jump to tag stack position ' .. i })
+  end
+end
+
+-- Jump to specific position in tag stack
+function M.jump_to_position(position)
+  if not state.active_stack_id then
+    print("No active tag stack")
+    return
+  end
+  
+  local stack = state.stacks[state.active_stack_id]
+  if not stack then
+    print("Active stack not found")
+    return
+  end
+  
+  -- Position 1 = root (tag stack position 0)
+  -- Position 2 = first tag (tag stack position 1)
+  -- etc.
+  local target_idx = position - 1
+  
+  if target_idx == 0 then
+    -- Jump to root - clear the tag stack
+    vim.fn.settagstack(vim.fn.winnr(), {items = {}, curidx = 1})
+    if stack.root_file and vim.fn.filereadable(stack.root_file) == 1 then
+      vim.cmd('edit ' .. vim.fn.fnameescape(stack.root_file))
+      if stack.root_line then
+        vim.api.nvim_win_set_cursor(0, {stack.root_line, 0})
+      end
+    end
+  elseif target_idx > 0 and target_idx <= #stack.display_items then
+    -- Jump to specific tag position
+    local current_tag_stack = vim.fn.gettagstack()
+    local current_idx = math.max(0, (current_tag_stack.curidx or 1) - 1)
+    
+    if target_idx > current_idx then
+      -- Need to go deeper - this is tricky since we can't easily reconstruct the path
+      print("Cannot jump forward beyond current tag stack depth")
+      return
+    elseif target_idx < current_idx then
+      -- Go back the right number of steps
+      local steps_back = current_idx - target_idx
+      for _ = 1, steps_back do
+        vim.cmd('pop')  -- Use :pop command to go back (equivalent to C-t)
+      end
+    end
+    -- If target_idx == current_idx, we're already there
+  else
+    if #stack.display_items == 0 then
+      print("No tags in stack to navigate to")
+    else
+      print("Position " .. position .. " not available (max: " .. (#stack.display_items + 1) .. ")")
     end
   end
 end
