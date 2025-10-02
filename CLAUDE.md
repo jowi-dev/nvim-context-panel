@@ -12,10 +12,13 @@ Build a unified Neovim plugin that provides a right-side context panel with two 
 - **Easy Installation**: Single plugin installation with optional features
 
 ### 2. Tag Stack Module (existing functionality)
-- **Root Initialization**: When a file is opened with `:e` command, it becomes the root/top of the stack
-- **Stack Building**: Each `C-]` (tag jump) adds a new level to the visualization stack
+- **Multi-Stack Support**: Multiple named stacks that can be created and switched between
+- **Root Initialization**: When a file is opened, it becomes the root/top of a new stack
+- **Stack Building**: Each `C-]` (tag jump) adds a new level with downward arrow visualization
 - **Stack Navigation**: `C-t` (tag pop) moves back up the stack and updates the visualization
 - **Real-time Updates**: Panel updates immediately on tag navigation events
+- **Stack Switching**: Use `:TagStackNext`/`:TagStackPrev` to switch between multiple stacks
+- **Current Position Indicators**: Shows `← [current]` for active position and `▶` for active stack
 
 ### 3. Completion Module (new functionality)
 - **Right-side List**: Show completions in numbered/lettered list with quick selection keys
@@ -35,10 +38,13 @@ Build a unified Neovim plugin that provides a right-side context panel with two 
 │ 3. useCallback                  │
 ├─────────────────────────────────┤
 │ Tag Stack (60% height)          │
-│ 📁 my_app.ex:45                 │
-│ │  └─ MyApp.Server              │
-│ │     └─ handle_call/3:78       │
-│ │        └─ process_request/2   │
+│ 📁 Tag Stacks:                  │
+│ ▶ MyApp                         │
+│   MyApp (root) ← [current]      │
+│   ↓                             │
+│   MyApp.Server.handle_call/3    │
+│   ↓                             │
+│   MyApp.process_request/2       │
 └─────────────────────────────────┘
 ```
 
@@ -85,6 +91,9 @@ Build a unified Neovim plugin that provides a right-side context panel with two 
 - `:TagStackToggle` - Toggle just tag stack section
 - `:CompletionToggle` - Toggle just completion section
 - `:TagStackClear` - Clear current tag stack
+- `:TagStackNew` - Create a new tag stack
+- `:TagStackNext` - Switch to next stack
+- `:TagStackPrev` - Switch to previous stack
 
 ### 3. Completion Commands
 - `:CompletionPreview` - Show/hide preview window

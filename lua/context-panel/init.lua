@@ -216,8 +216,9 @@ function M.debounced_update(delay)
   
   -- Schedule new update
   print("DEBUG: scheduling timer at:", vim.fn.reltimestr(vim.fn.reltime()))
+  print("DEBUG: panel visible?", state.is_visible)
   state.update_timer = vim.fn.timer_start(delay, function()
-    print("DEBUG: timer callback fired at:", vim.fn.reltimestr(vim.fn.reltime()))
+    print("DEBUG: *** TIMER CALLBACK FIRED ***")
     state.update_timer = nil
     if state.is_visible then
       print("DEBUG: calling update_display() at:", vim.fn.reltimestr(vim.fn.reltime()))
@@ -227,6 +228,10 @@ function M.debounced_update(delay)
     end
   end)
   print("DEBUG: timer scheduled with id:", state.update_timer)
+  
+  -- Test if timer is valid immediately
+  local timer_info = vim.fn.timer_info(state.update_timer)
+  print("DEBUG: timer info:", vim.inspect(timer_info))
 end
 
 -- Check if panel should auto-show
