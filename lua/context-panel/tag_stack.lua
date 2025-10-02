@@ -123,6 +123,28 @@ function M.setup(config)
     end
   end, { nargs = 1 })
   
+  -- Debug command to show internal stack state
+  vim.api.nvim_create_user_command('TagStackShowState', function()
+    if not state.active_stack_id then
+      print("No active stack")
+      return
+    end
+    local stack = state.stacks[state.active_stack_id]
+    if not stack then
+      print("Active stack not found")
+      return
+    end
+    print("=== Stack State ===")
+    print("Current idx:", stack.current_idx)
+    print("Max depth:", stack.max_depth)
+    print("Neovim items:", #stack.items)
+    print("Display items:", #stack.display_items)
+    for i, item in ipairs(stack.display_items) do
+      local current_marker = (i == stack.current_idx) and " ← [current]" or ""
+      print(string.format("  %d. %s%s", i, item.tagname or "unknown", current_marker))
+    end
+  end, {})
+  
   -- Fallback with shorter delay for any missed updates
 --  vim.api.nvim_create_autocmd({'CursorHold'}, {
 --    group = augroup,
@@ -162,8 +184,15 @@ end
 -- Clear the current tag stack
 function M.clear()
   if state.active_stack_id then
-    state.stacks[state.active_stack_id] = nil
-    state.active_stack_id = nil
+    local stack = state.stacks[state.active_stack_id]
+    if stack then
+      -- Reset the persistent display items
+      stack.display_items = {}
+      stack.max_depth = 0
+    else
+      state.stacks[state.active_stack_id] = nil
+      state.active_stack_id = nil
+    end
   end
   -- Clear Neovim's tag stack
   vim.fn.settagstack(vim.fn.winnr(), {items = {}, curidx = 1})
@@ -183,8 +212,10 @@ function M.new_stack()
   state.stacks[stack_id] = {
     name = root_name,
     items = {},
+    display_items = {}, -- Items to display (includes items beyond current position)
     root_file = current_file,
     root_line = vim.api.nvim_win_get_cursor(0)[1],
+    max_depth = 0, -- Track maximum depth reached
   }
   
   state.active_stack_id = stack_id
@@ -296,9 +327,8 @@ function M.detect_stack_changes()
     active_stack.at_root = false
   end
   
-  -- Update current stack with tag stack data
-  active_stack.items = current_tag_stack.items or {}
-  active_stack.current_idx = normalized_curidx
+  -- Update current stack with persistent tag stack logic
+  M.update_persistent_stack(active_stack, current_tag_stack.items or {}, normalized_curidx)
   state.cached_display = nil
   
   -- Use lightweight update request with minimal delay for tag navigation
@@ -381,9 +411,9 @@ function M.format_display(config)
     table.insert(lines, root_line)
     line_num = line_num + 1
     
-    -- Show stack items
+    -- Show stack items (use display_items for persistent view)
     local current_idx = stack.current_idx or 0
-    local items_to_show = math.min(#stack.items, current_idx)
+    local items_to_show = #stack.display_items
     
     for i = 1, items_to_show do
       if i > config.max_stack_depth then
@@ -392,7 +422,7 @@ function M.format_display(config)
         break
       end
       
-      local item = stack.items[i]
+      local item = stack.display_items[i]
       local is_current = is_active and (i == current_idx) and (current_idx > 0)
       
       local tag_name = item.tagname or ""
@@ -491,6 +521,60 @@ function M.format_elixir_tag_display(tag_name, item)
   
   -- Default: combine module and tag
   return string.format("%s.%s", module_name, tag_name)
+end
+
+-- Update stack with persistent display logic
+function M.update_persistent_stack(stack, current_items, current_idx)
+  -- Store the current Neovim tag stack state
+  stack.items = current_items
+  stack.current_idx = current_idx
+  
+  -- If we're at a deeper level than before, extend display_items
+  if current_idx > stack.max_depth then
+    -- We've gone deeper - extend display with new items
+    for i = stack.max_depth + 1, current_idx do
+      if current_items[i] then
+        stack.display_items[i] = vim.deepcopy(current_items[i])
+      end
+    end
+    stack.max_depth = current_idx
+  elseif current_idx < #stack.display_items then
+    -- We've gone back up - check if we're branching in a new direction
+    local branching = false
+    
+    -- Check if the current path differs from our display path
+    for i = 1, current_idx do
+      if current_items[i] and stack.display_items[i] then
+        if current_items[i].tagname ~= stack.display_items[i].tagname then
+          branching = true
+          break
+        end
+      elseif current_items[i] or stack.display_items[i] then
+        -- One exists, other doesn't - this is a branch
+        branching = true
+        break
+      end
+    end
+    
+    if branching then
+      -- We're branching - truncate display_items and replace with current path
+      stack.display_items = {}
+      for i = 1, current_idx do
+        if current_items[i] then
+          stack.display_items[i] = vim.deepcopy(current_items[i])
+        end
+      end
+      stack.max_depth = current_idx
+    end
+    -- If not branching, keep existing display_items (preserve deeper items)
+  end
+  
+  -- Ensure display_items includes at least the current path
+  for i = 1, current_idx do
+    if current_items[i] and not stack.display_items[i] then
+      stack.display_items[i] = vim.deepcopy(current_items[i])
+    end
+  end
 end
 
 -- Check if there's a meaningful tag stack
